@@ -24,7 +24,7 @@ def read(USERNAME, PASSWORD, SENDER):
 
     status, response = mail.search(None, 'UNSEEN')  # only looking at unread emails
     new_email_ids = response[0].split()  # response is a list of string ['1 2 3 4']
-    print "New Emails Found: " + str(len(response[0]))
+    print "New Emails Found: " + str(len(response[0].split()))
 
     for email_id in new_email_ids:
         sender_mail = mail.fetch(email_id, '(BODY[HEADER.FIELDS (FROM)])')[1][0][1]  # 'From: Google <no-reply@accounts.google.com>'
@@ -51,7 +51,7 @@ def make_new_txt_file(body, subject):
     # takes in the body of the email and writes it into a word doc
     # saves under the name of the subject of the email
     # time stamped
-    title = subject.lower() + '.txt'
+    title = subject.lower() + " " + str(date.today()) + '.txt'
     os.chdir("/Users/JLiu2/Dropbox/recipe_repo")
     new_recipe = open(title, 'w')
     new_recipe.write(subject + '\n' + '\n')
