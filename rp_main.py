@@ -129,24 +129,29 @@ def get_recipe(ingredients):
     # finds recipes in the repo with matching ingredients
     # picks 1 randomly
     # returns the recipe as a string
-    ingredients = ingredients.split(",")
+    ingredients_lst = ingredients.split(",")
+    ingredients = []
+    for ingredient in ingredients_lst:
+        ingredients.append(ingredient.strip())
     recipes = {"all": []}  # dictionary to hold the recipes containing the ingredients
     recipe_found = False
     for ingredient in ingredients:
         recipes[ingredient] = []
     files = os.listdir(REPO)
     for afile in files:
-        if afile[-4::-1] == ".txt":
+        if afile[-4:] == ".txt":
             afile = REPO+afile
             ingredients_matched = []
             for i in range(len(ingredients)):
                 if ingredients[i] in open(afile).read():
+                    print "We found the ingredient"
                     recipe_found = True
                     ingredients_matched.append(i)
                     recipes[ingredients[i]].append(afile)
                     if len(ingredients_matched) == len(ingredients):
                         recipes["all"].append(afile)
                 else:
+                    print "we did not find the ingredient"
                     continue
 
     if recipe_found:
@@ -160,11 +165,11 @@ def get_recipe(ingredients):
 
     sender = USERNAME+"@gmail.com"
     to = SENDER
-    subject = choosen_recipe
-    message_text = open(REPO+choosen_recipe, 'r').read()
+    subject = choosen_recipe[33:]
+    message_text = open(choosen_recipe, 'r').read()
     email = create_message(sender, to, subject, message_text)
     sent_email = send_message(service, "me", email)
-    print "****** eMail Sent ********", sent_email
+    print "******" + str(sent_email) + "********"
 
 
 def get_ingredient_category(ingredients):
