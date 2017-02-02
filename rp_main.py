@@ -1,7 +1,16 @@
 # from docx import Document
 # from apscheduler.schedulers.background import BackgroundScheduler
+from httplib2 import Http
+from apiclient import discovery, errors
+from oauth2client import client
+from oauth2client import tools
+from oauth2client.file import Storage
+from email.mime.text import MIMEText
 from datetime import date
-from random 
+import random
+import base64
+import mimetypes
+import httplib2
 import imaplib
 import quopri
 import pdb
@@ -11,6 +20,53 @@ USERNAME = os.environ.get("USERNAME_EMAIL")
 PASSWORD = os.environ.get("PASSWORD_EMAIL")
 SENDER = os.environ.get("SENDER_EMAIL")
 REPO = os.environ.get("RECIPE_REPO")
+
+################## GMAIL OAUTH ############################
+try:
+    import argparse
+    flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
+except ImportError:
+    flags = None
+
+# If modifying these scopes, delete your previously saved credentials
+# at ~/.credentials/gmail-python-quickstart.json
+SCOPES = 'https://mail.google.com/'
+CLIENT_SECRET_FILE = 'client_secret.json'
+APPLICATION_NAME = 'Gmail API Python Quickstart'
+
+
+def get_credentials():
+    """Gets valid user credentials from storage.
+
+    If nothing has been stored, or if the stored credentials are invalid,
+    the OAuth2 flow is completed to obtain the new credentials.
+
+    Returns:
+        Credentials, the obtained credential.
+    """
+    home_dir = os.path.expanduser('~')
+    credential_dir = os.path.join(home_dir, '.credentials')
+    if not os.path.exists(credential_dir):
+        os.makedirs(credential_dir)
+    credential_path = os.path.join(credential_dir,
+                                   'gmail-python-quickstart.json')
+
+    store = Storage(credential_path)
+    credentials = store.get()
+    if not credentials or credentials.invalid:
+        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
+        flow.user_agent = APPLICATION_NAME
+        if flags:
+            credentials = tools.run_flow(flow, store, flags)
+        else:  # Needed only for compatibility with Python 2.6
+            credentials = tools.run(flow, store)
+        print('Storing credentials to ' + credential_path)
+    return credentials
+
+
+credentials = get_credentials()
+service = discovery.build('gmail', 'v1', http=credentials.authorize(Http()))
+########################################################################
 
 
 def read(USERNAME, PASSWORD, SENDER):
@@ -32,11 +88,11 @@ def read(USERNAME, PASSWORD, SENDER):
         sender_mail = mail.fetch(email_id, '(BODY[HEADER.FIELDS (FROM)])')[1][0][1]  # 'From: Google <no-reply@accounts.google.com>'
         if sender_mail[6:].strip() == SENDER:
             subject = mail.fetch(email_id, '(BODY[HEADER.FIELDS (SUBJECT)])')[1][0][1]
-             _, response = mail.fetch(email_id, '(UID BODY[TEXT])')  # returns OK [body]
+            _, response = mail.fetch(email_id, '(UID BODY[TEXT])')  # returns OK [body]
             subject = subject[9:].strip()
             body_text = quopri.decodestring(get_plain_text(response[0][1]))
             if subject.lower() == "recipe request":
-                recipe = get_recipe(body_text)
+                get_recipe(body_text)
             else:
                 make_new_txt_file(body_text, subject[9:].strip())
 
@@ -75,53 +131,90 @@ def get_recipe(ingredients):
     # returns the recipe as a string
     ingredients = ingredients.split(",")
     recipes = {"all": []}  # dictionary to hold the recipes containing the ingredients
+    recipe_found = False
     for ingredient in ingredients:
         recipes[ingredient] = []
     files = os.listdir(REPO)
     for afile in files:
-        ingredients_matched = []
-        recipe_found = False
-        for i in range(len(ingredients)):
-            if ingredients[i] in open(afile).read():
-                recipe_found = True
-                ingredients_matched.append(i)
-                recipies[ingredients[i]].append(afile)
-                if len(ingredients_matched) == len(ingredients):
-                    recipies["all"].append(afile)
-            else:
-                continue
+        if afile[-4::-1] == ".txt":
+            afile = REPO+afile
+            ingredients_matched = []
+            for i in range(len(ingredients)):
+                if ingredients[i] in open(afile).read():
+                    recipe_found = True
+                    ingredients_matched.append(i)
+                    recipes[ingredients[i]].append(afile)
+                    if len(ingredients_matched) == len(ingredients):
+                        recipes["all"].append(afile)
+                else:
+                    continue
 
     if recipe_found:
-        if len(recipies["all"]) != 0:
-            choosen_recipe = recipies["all"][random.randint(0:len(recipies["all"])-1)]
+        if len(recipes["all"]) != 0:
+            choosen_recipe = recipes["all"][random.randint(0, len(recipes["all"])-1)]
         else:
             category = get_ingredient_category(ingredients)
             choosen_recipe = recipes[category]
     else:
-        ## do something when no recipe is found
+        choosen_recipe = "No recipe found.txt"
 
-    ## do something to email choosen_recipe
+    sender = USERNAME+"@gmail.com"
+    to = SENDER
+    subject = choosen_recipe
+    message_text = open(REPO+choosen_recipe, 'r').read()
+    email = create_message(sender, to, subject, message_text)
+    sent_email = send_message(service, "me", email)
+    print "****** eMail Sent ********", sent_email
+
 
 def get_ingredient_category(ingredients):
-    # get a dictionary of ingredients and their recipes
-    # returns a category of ingredient that isn't "all" or have no recipes
-    category = random.choice(ingredients.keys()) 
+    """ get a dictionary of ingredients and their recipes
+    returns a category of ingredient that isn't "all" or have no recipes
+    """
+    category = random.choice(ingredients.keys())
     if category == "all" or len(ingredients[category]) == 0:
         get_ingredient_category(ingredients)
     else:
         return category
 
 
+def create_message(sender, to, subject, message_text):
+    """Create a message for an email.
+    Args:
+    sender: Email address of the sender.
+    to: Email address of the receiver.
+    subject: The subject of the email message.
+    message_text: The text of the email message.
+
+    Returns:
+    An object containing a base64url encoded email object.
+    """
+    message = MIMEText(message_text)
+    message['to'] = to
+    message['from'] = sender
+    message['subject'] = subject
+    return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
 
+def send_message(service, user_id, message):
+    """Send an email message.
 
+    Args:
+    service: Authorized Gmail API service instance.
+    user_id: User's email address. The special value "me"
+    can be used to indicate the authenticated user.
+    message: Message to be sent.
 
-
-
-
-
-
-
+    Returns:
+    Sent Message.
+    """
+    try:
+        message = (service.users().messages().send(userId=user_id, body=message)
+                   .execute())
+        print 'Message Id: %s' % message['id']
+        return message
+    except errors.HttpError, error:
+        print 'An error occurred: %s' % error
 
 
 if __name__ == "__main__":

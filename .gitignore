@@ -1,3 +1,4 @@
 .env
 venv
 secrets.sh
+client_secret.json
