@@ -1,5 +1,7 @@
 # from docx import Document
+# from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date
+from random 
 import imaplib
 import quopri
 import pdb
@@ -29,10 +31,14 @@ def read(USERNAME, PASSWORD, SENDER):
     for email_id in new_email_ids:
         sender_mail = mail.fetch(email_id, '(BODY[HEADER.FIELDS (FROM)])')[1][0][1]  # 'From: Google <no-reply@accounts.google.com>'
         if sender_mail[6:].strip() == SENDER:
-            _, response = mail.fetch(email_id, '(UID BODY[TEXT])')  # returns OK [body]
-            body_text = quopri.decodestring(get_plain_text(response[0][1]))
             subject = mail.fetch(email_id, '(BODY[HEADER.FIELDS (SUBJECT)])')[1][0][1]
-            make_new_txt_file(body_text, subject[9:].strip())
+             _, response = mail.fetch(email_id, '(UID BODY[TEXT])')  # returns OK [body]
+            subject = subject[9:].strip()
+            body_text = quopri.decodestring(get_plain_text(response[0][1]))
+            if subject.lower() == "recipe request":
+                recipe = get_recipe(body_text)
+            else:
+                make_new_txt_file(body_text, subject[9:].strip())
 
 
 def get_plain_text(text):
@@ -52,13 +58,70 @@ def make_new_txt_file(body, subject):
     # saves under the name of the subject of the email
     # time stamped
     title = subject.lower() + " " + str(date.today()) + '.txt'
-    os.chdir("/Users/JLiu2/Dropbox/recipe_repo")
+    os.chdir(REPO)
     new_recipe = open(title, 'w')
     new_recipe.write(subject + '\n' + '\n')
     new_recipe.write(body + '\n' + '\n')
     new_recipe.write("Recipe recorded automatically on " + str(date.today()))
     new_recipe.close()
     print "New file titled " + title + " created."
+
+
+def get_recipe(ingredients):
+    # takes a string of ingredients separated by comma
+    # converts string into list of ingredients
+    # finds recipes in the repo with matching ingredients
+    # picks 1 randomly
+    # returns the recipe as a string
+    ingredients = ingredients.split(",")
+    recipes = {"all": []}  # dictionary to hold the recipes containing the ingredients
+    for ingredient in ingredients:
+        recipes[ingredient] = []
+    files = os.listdir(REPO)
+    for afile in files:
+        ingredients_matched = []
+        recipe_found = False
+        for i in range(len(ingredients)):
+            if ingredients[i] in open(afile).read():
+                recipe_found = True
+                ingredients_matched.append(i)
+                recipies[ingredients[i]].append(afile)
+                if len(ingredients_matched) == len(ingredients):
+                    recipies["all"].append(afile)
+            else:
+                continue
+
+    if recipe_found:
+        if len(recipies["all"]) != 0:
+            choosen_recipe = recipies["all"][random.randint(0:len(recipies["all"])-1)]
+        else:
+            category = get_ingredient_category(ingredients)
+            choosen_recipe = recipes[category]
+    else:
+        ## do something when no recipe is found
+
+    ## do something to email choosen_recipe
+
+def get_ingredient_category(ingredients):
+    # get a dictionary of ingredients and their recipes
+    # returns a category of ingredient that isn't "all" or have no recipes
+    category = random.choice(ingredients.keys()) 
+    if category == "all" or len(ingredients[category]) == 0:
+        get_ingredient_category(ingredients)
+    else:
+        return category
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
