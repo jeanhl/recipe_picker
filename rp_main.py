@@ -21,7 +21,7 @@ PASSWORD = os.environ.get("PASSWORD_EMAIL")
 SENDER = os.environ.get("SENDER_EMAIL")
 REPO = os.environ.get("RECIPE_REPO")
 
-################## GMAIL OAUTH ############################
+############################ GMAIL OAUTH ############################
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
@@ -70,10 +70,11 @@ service = discovery.build('gmail', 'v1', http=credentials.authorize(Http()))
 
 
 def read(USERNAME, PASSWORD, SENDER):
-    # USERNAME = USERNAME of gmail that accepts the recipes and commands
-    # PASSWORD = PASSWORD of said gmail account
-    # SENDER = for security purposes, only get text body from certain SENDER
-    # SENDER format = "First Last <SENDER@gmail.com>"
+    """ USERNAME = USERNAME of gmail that accepts the recipes and commands
+        PASSWORD = PASSWORD of said gmail account
+        SENDER = for security purposes, only get text body from certain SENDER
+        SENDER format = "First Last <SENDER@gmail.com>"
+    """
 
     # connecting to gMail's imap, logging in and going into INBOX
     mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
@@ -98,9 +99,11 @@ def read(USERNAME, PASSWORD, SENDER):
 
 
 def get_plain_text(text):
-    # takes in a massive string like an email body
-    # removes the headers, text/html portion
-    # returns a cleaned up text of the email body
+    """ takes in a massive string like an email body
+        removes the headers, text/html portion
+        returns a cleaned up text of the email body
+    """
+
     first_line_break = text.index('\r')
     gibberish = text[:first_line_break]
     second_gibberish_index = text.index(gibberish, first_line_break)
@@ -110,9 +113,10 @@ def get_plain_text(text):
 
 
 def make_new_txt_file(body, subject):
-    # takes in the body of the email and writes it into a word doc
-    # saves under the name of the subject of the email
-    # time stamped
+    """ takes in the body of the email and writes it into a word doc
+        saves under the name of the subject of the email
+        time stamped
+    """
     title = subject.lower() + " " + str(date.today()) + '.txt'
     os.chdir(REPO)
     new_recipe = open(title, 'w')
@@ -124,52 +128,78 @@ def make_new_txt_file(body, subject):
 
 
 def get_recipe(ingredients):
-    # takes a string of ingredients separated by comma
-    # converts string into list of ingredients
-    # finds recipes in the repo with matching ingredients
-    # picks 1 randomly
-    # returns the recipe as a string
-    ingredients_lst = ingredients.split(",")
-    ingredients = []
-    for ingredient in ingredients_lst:
-        ingredients.append(ingredient.strip())
+    """ takes a string of ingredients separated by comma
+        converts string into list of ingredients
+        finds recipes in the repo with matching ingredients
+        picks 1 randomly
+        returns the recipe as a string
+    """
+
+    ingredients = get_ingredients_in_list(ingredients)
+
     recipes = {"all": []}  # dictionary to hold the recipes containing the ingredients
-    recipe_found = False
+    recipe_found = False  # quick check flag
     for ingredient in ingredients:
         recipes[ingredient] = []
+
     files = os.listdir(REPO)
     for afile in files:
         if afile[-4:] == ".txt":
             afile = REPO+afile
-            ingredients_matched = []
+            ingredients_matched = []  # see if a recipe has all the requested ingredients
             for i in range(len(ingredients)):
                 if ingredients[i] in open(afile).read():
-                    print "We found the ingredient"
                     recipe_found = True
                     ingredients_matched.append(i)
                     recipes[ingredients[i]].append(afile)
                     if len(ingredients_matched) == len(ingredients):
                         recipes["all"].append(afile)
                 else:
-                    print "we did not find the ingredient"
                     continue
 
     if recipe_found:
-        if len(recipes["all"]) != 0:
-            choosen_recipe = recipes["all"][random.randint(0, len(recipes["all"])-1)]
-        else:
-            category = get_ingredient_category(ingredients)
-            choosen_recipe = recipes[category]
+        choosen_recipe = get_random_recipe(recipes, ingredients)
+        print type(choosen_recipe), choosen_recipe
     else:
-        choosen_recipe = "No recipe found.txt"
+        choosen_recipe = REPO + "No recipe found.txt"
 
+    compose_send_email(choosen_recipe[33:-4], open(choosen_recipe, 'r').read())
+
+
+def get_random_recipe(recipes_dict, ingredients):
+    """ gets the dictionary where keys are ingredients and values of recipes with the ingredient.
+        returns a random recipe. Priority given to recipes that have ALL the ingredients.
+    """
+    if len(recipes_dict["all"]) != 0:
+        choosen_recipe = recipes_dict["all"][random.randint(0, len(recipes_dict["all"])-1)]
+    else:
+        category = get_ingredient_category(ingredients)
+        choosen_recipe = recipes_dict[category]
+
+    return choosen_recipe
+
+
+def get_ingredients_in_list(ingredients):
+    """ gets a string of ingredients separated by comma.
+        returns a list of those ingredients
+    """
+    ingredients_lst = []
+    ingredients = ingredients.split(",")
+    for ingredient in ingredients:
+        ingredients_lst.append(ingredient.strip())  # gets rid of extra spaces
+
+    return ingredients_lst
+
+
+def compose_send_email(subject, message_text):
+    """ gets all the arguments to call create_message function.
+        returns the sent sent_status.
+    """
     sender = USERNAME+"@gmail.com"
     to = SENDER
-    subject = choosen_recipe[33:]
-    message_text = open(choosen_recipe, 'r').read()
     email = create_message(sender, to, subject, message_text)
-    sent_email = send_message(service, "me", email)
-    print "******" + str(sent_email) + "********"
+    sent_status = send_message(service, "me", email)
+    return sent_status[0].encode('utf-8')  # if successful, returns 'SENT'
 
 
 def get_ingredient_category(ingredients):
@@ -217,7 +247,7 @@ def send_message(service, user_id, message):
         message = (service.users().messages().send(userId=user_id, body=message)
                    .execute())
         print 'Message Id: %s' % message['id']
-        return message
+        return message['labelIds']
     except errors.HttpError, error:
         print 'An error occurred: %s' % error
 
