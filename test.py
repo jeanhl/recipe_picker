@@ -13,5 +13,6 @@ class RPUnitTestCase(unittest.TestCase):
     def get_recipe(self):
         """ tests different inputs and the resulting command """
         # get_recipe returns boolean when given a list of ingredients
-        self.assertTrue(rp_main.get_recipe("garlic , butter, "), "start new game")
-        
+        self.assertTrue(rp_main.get_recipe("garlic , butter, "))
+        self.assertTrue(rp_main.get_recipe("     garlic , butter, "))
+        self.assertTrue(rp_main.get_recipe("GaRliC ,   butter, "))
