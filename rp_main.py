@@ -164,6 +164,7 @@ def get_recipe(ingredients):
         choosen_recipe = REPO + "No recipe found.txt"
 
     compose_send_email(choosen_recipe[33:-4], open(choosen_recipe, 'r').read())
+    return recipe_found
 
 
 def get_random_recipe(recipes_dict, ingredients):
@@ -175,7 +176,6 @@ def get_random_recipe(recipes_dict, ingredients):
     else:
         category = get_ingredient_category(ingredients)
         choosen_recipe = recipes_dict[category]
-
     return choosen_recipe
 
 
